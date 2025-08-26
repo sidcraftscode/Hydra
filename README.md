@@ -10,7 +10,7 @@ Important: These scripts are illustrative and operate at small scale on syntheti
 
 ## Contents
 - `toy_hydra.py` — Minimal Hydra model (SSM + sparse attention + MoE) used in benchmarks.
-- `ssm_kernels.py` — Fast SSM/scan and surrogate kernels used by the toy model.
+- `ssm_kernels.py` — Placeholder selective-scan SSM; the fast surrogate lives in `toy_hydra.py`.
 - `workspace_memory.py` — Latent workspace memory (read/write) toy implementation.
 - `pkm_memory.py` — Product-Key Memory (PKM) toy layer and helpers.
 - `fairness_benchmark.py` — Training loop and short-context throughput benchmark on synthetic tasks.
@@ -33,22 +33,16 @@ Create an environment and install dependencies, then run any of the scripts belo
 
 Examples:
 
-- Train on synthetic tasks and log losses
+- Run benchmark + training (default)
   
   ```bash
-  python fairness_benchmark.py --train
+  python fairness_benchmark.py
   ```
 
-- Short-context throughput benchmark (1k–16k)
+- Long-context benchmark (1k–16k)
   
   ```bash
-  python fairness_benchmark.py --throughput
-  ```
-
-- Long-context benchmark (e.g., 16k tokens)
-  
-  ```bash
-  python run_long_context.py --maxlen 16384
+  python run_long_context.py
   ```
 
 - Aggregate speedups and render a markdown table/JSON
@@ -60,7 +54,7 @@ Examples:
 - Plot figures from `results/`
   
   ```bash
-  python plot_results.py --input results
+  python plot_results.py
   ```
 
 Notes:
