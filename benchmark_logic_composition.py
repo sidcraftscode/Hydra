@@ -126,6 +126,8 @@ def train_task(model, vocab_size: int, data_fn, device: str, steps=1600, B=48, c
         opt.zero_grad(); loss.backward(); opt.step()
         if step < warmup:
             for g in opt.param_groups: g['lr'] = lr * (step + 1) / max(1, warmup)
+        if (step + 1) % 100 == 0:
+            print(f"[logic] step {step+1}/{steps}  loss={loss.item():.4f}")
 
 
 @torch.no_grad()

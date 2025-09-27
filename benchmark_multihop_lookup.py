@@ -127,6 +127,8 @@ def train_task(model, vocab_size: int, data_fn, device: str, steps=1500, B=32,
         opt.zero_grad(); loss.backward(); opt.step()
         if step < warmup:
             for g in opt.param_groups: g['lr'] = lr * (step + 1) / max(1, warmup)
+        if (step + 1) % 100 == 0:
+            print(f"[multihop] step {step+1}/{steps}  loss={loss.item():.4f}")
         
 
 
