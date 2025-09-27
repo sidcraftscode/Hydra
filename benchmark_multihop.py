@@ -136,7 +136,7 @@ def evaluate(model, device, vocab: Vocab, hops: int, n_samples: int, n_distracto
         chain_nodes = {u for (u, _v) in edges} | {answer}
         # For short hops, avoid branching from start and reduce distractors
         if hops <= 2:
-            chain_nodes = {n for n in chain_nodes if n != start}
+            chain_nodes = {n for n in chain_nodes if n not in {start, answer}}
             local_n = max(2, n_distractors // 2)
         else:
             local_n = n_distractors
@@ -158,11 +158,15 @@ def train_mixture(model, device, vocab: Vocab, cfg: BenchConfig):
         # Sample mixed hops in batch
         seqs, ans_pos, targets = [], [], []
         for _ in range(cfg.batch_size):
-            k = random.randint(cfg.max_hops_train[0], cfg.max_hops_train[1])
+            # Stronger curriculum for k=2 during warmup
+            if step < cfg.warmup:
+                k = 2 if random.random() < 0.85 else random.randint(cfg.max_hops_train[0], cfg.max_hops_train[1])
+            else:
+                k = random.randint(cfg.max_hops_train[0], cfg.max_hops_train[1])
             edges, start, answer = make_chain(k, n_entities=200)
             chain_nodes = {u for (u, _v) in edges} | {answer}
             if k <= 2:
-                chain_nodes = {n for n in chain_nodes if n != start}
+                chain_nodes = {n for n in chain_nodes if n not in {start, answer}}
                 local_n = max(2, cfg.n_distractors // 2)
             else:
                 local_n = cfg.n_distractors
@@ -213,7 +217,7 @@ def build_variants(base_cfg: HydraConfig):
     cfg_off = HydraConfig(**{**base_cfg.__dict__, 'use_pkm': False})
     variants['hydra_pkm_off'] = ToyHydra(cfg_off)
     # Hydra PKM ON
-    cfg_on = HydraConfig(**{**base_cfg.__dict__, 'use_pkm': True, 'pkm_every': 2, 'pkm_topk': 2, 'pkm_gate_bias': -0.5, 'pkm_dropout': 0.02})
+    cfg_on = HydraConfig(**{**base_cfg.__dict__, 'use_pkm': True, 'pkm_every': 1, 'pkm_topk': 2, 'pkm_gate_bias': 0.5, 'pkm_dropout': 0.02})
     variants['hydra_pkm_on'] = ToyHydra(cfg_on)
     return variants
 
