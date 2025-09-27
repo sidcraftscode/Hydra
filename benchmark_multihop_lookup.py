@@ -77,7 +77,7 @@ def gen_chain_sequence(start: int, hops: int, vocab: Vocab, max_entity: int, dis
     # shuffle facts
     random.shuffle(facts)
 
-    # Serialize: e a r r o w ; tokens
+    # Serialize: e a r r o w ; tokens (ensure sufficient context precedes query)
     tokens: List[int] = []
     for a, b in facts:
         tokens.extend([a, vocab.arrow, b, vocab.semi])
@@ -123,7 +123,8 @@ def train_task(model, vocab_size: int, data_fn, device: str, steps=1500, B=32,
         # Cross-entropy at final position per example
         gathered = logits[torch.arange(B, device=device), idx]
         y = torch.tensor(targets, device=device)
-        loss = F.cross_entropy(gathered, y)
+        # mild label smoothing for stability across models
+        loss = F.cross_entropy(gathered, y, label_smoothing=0.05)
         opt.zero_grad(); loss.backward(); opt.step()
         if step < warmup:
             for g in opt.param_groups: g['lr'] = lr * (step + 1) / max(1, warmup)

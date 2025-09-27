@@ -309,15 +309,19 @@ class TransformerBlock(nn.Module):
         return self.res_ln(x)
 
 class BaselineTransformer(nn.Module):
-    def __init__(self, d=256, vocab_size=4000, n_layers=8, n_heads=4):
+    def __init__(self, d=256, vocab_size=4000, n_layers=8, n_heads=4, max_seq_len: int = 8192):
         super().__init__()
         self.embed = nn.Embedding(vocab_size, d)
+        self.pos = nn.Embedding(max_seq_len, d)
         self.blocks = nn.ModuleList([TransformerBlock(d, n_heads) for _ in range(n_layers)])
         self.ln_f = nn.LayerNorm(d)
         self.head = nn.Linear(d, vocab_size, bias=False)
         self.head.weight = self.embed.weight
     def forward(self, idx):
-        x = self.embed(idx)
+        B, T = idx.shape
+        tok = self.embed(idx)
+        pos_ids = torch.arange(T, device=idx.device).unsqueeze(0)
+        x = tok + self.pos(pos_ids)
         for b in self.blocks:
             x = b(x)
         x = self.ln_f(x)
