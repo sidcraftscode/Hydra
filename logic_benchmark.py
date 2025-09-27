@@ -51,11 +51,24 @@ def gen_chain_example(stoi: Dict[str, int], L: int, max_branch: int = 0) -> Tupl
     pairs = [(nodes[i], nodes[i + 1]) for i in range(L)]
     distractors = []
     for _ in range(max_branch):
-        x, y = random.sample(ents, 2)
-        if (x, y) not in pairs:
+        # Avoid sharing LHS with query head; avoid creating the final direct edge; avoid overlapping true pairs
+        tries = 0
+        while True:
+            tries += 1
+            x, y = random.sample(ents, 2)
+            if x == nodes[0]:
+                continue
+            if (x, y) in pairs:
+                continue
+            if (nodes[0], nodes[-1]) == (x, y):
+                continue
             distractors.append((x, y))
+            break
     seq_tokens: List[int] = []
-    for (a, b) in pairs + distractors:
+    # Shuffle rule order to avoid positional shortcuts
+    rules = pairs + distractors
+    random.shuffle(rules)
+    for (a, b) in rules:
         seq_tokens.extend([stoi[a], stoi['->'], stoi[b], stoi[',']])
     # query
     seq_tokens.extend([stoi[nodes[0]], stoi['->'], stoi['?'], stoi['<eos>']])
@@ -95,17 +108,16 @@ def evaluate(model, stoi: Dict[str, int], device: str, lengths=(2, 3, 4, 5), n_p
             Y = Y.to(device)
             reset_ws(model)
             logits = model(X)
-            # take last non-pad position logit as answer distribution; here it's fixed at <eos> - 1 position
-            # The answer should be generated at the token after '?', i.e., logits at position of <eos> - 1 gives next token
-            lengths_tok = (X != pad).sum(dim=1)
-            idxs = lengths_tok - 1  # position of <eos>
-            next_logits = logits[torch.arange(X.size(0), device=device), idxs - 0]  # logits at <eos> to predict <eos> token; but we want token before <eos>
-            # Instead, predict token at position of '?' (which is at eos-1); so use eos-1 logits to predict '?', not helpful.
-            # Better: shift targets: train to predict next token always. We'll hack: get logits at position where '?' is, and read next-token distribution.
-            # Find '?' positions per row
+            # Predict at '?' position (next-token should be the correct entity)
             qm = (X == stoi['?'])
-            qpos = qm.int().argmax(dim=1)  # first/only '?'
+            qpos = qm.int().argmax(dim=1)  # position of '?'
             next_logits = logits[torch.arange(X.size(0), device=device), qpos]
+            # Mask non-entity tokens
+            specials = ['<pad>', '<eos>', '->', ',', '?']
+            mask = torch.ones_like(next_logits, dtype=torch.bool)
+            for s in specials:
+                mask[:, stoi[s]] = False
+            next_logits = next_logits.masked_fill(~mask, float('-inf'))
             pred = next_logits.argmax(dim=-1)
             correct += (pred == Y).sum().item()
             total += X.size(0)
@@ -130,6 +142,12 @@ def train_on_synth(model, stoi: Dict[str, int], device: str, steps=2000, B=32, L
         qm = (X == stoi['?'])
         qpos = qm.int().argmax(dim=1)
         logits_q = logits[torch.arange(B, device=device), qpos]
+        # Mask non-entity tokens
+        specials = ['<pad>', '<eos>', '->', ',', '?']
+        mask = torch.ones_like(logits_q, dtype=torch.bool)
+        for s in specials:
+            mask[:, stoi[s]] = False
+        logits_q = logits_q.masked_fill(~mask, float('-inf'))
         loss = F.cross_entropy(logits_q, Y_ans)
         opt.zero_grad(); loss.backward(); opt.step()
         if (step + 1) % 200 == 0:
@@ -159,6 +177,12 @@ def build_models(vocab_size: int, base_d=192, blocks=6) -> Dict[str, torch.nn.Mo
 
 def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    # Reproducibility
+    seed = int(os.getenv('LOGIC_SEED', '1337'))
+    random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
     # Vocab with 200 entities to avoid collisions
     entities = make_entities(200)
     vocab = LogicVocab(entities=entities)
