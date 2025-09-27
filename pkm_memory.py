@@ -13,10 +13,17 @@ class PKMMemory(nn.Module):
         self.q_proj = nn.Linear(d, 2*key_dim, bias=False)
         self.val_proj = nn.Linear(value_dim, d, bias=False)
         self.gate = nn.Linear(d,1)
+        # discourage overuse at init
+        with torch.no_grad():
+            if self.gate.bias is None:
+                self.gate.bias = nn.Parameter(torch.tensor([-2.0]))
+            else:
+                self.gate.bias.fill_(-2.0)
+        self.dropout = nn.Dropout(p=0.05)
     def forward(self, x):  # x (B,T,d)
-        B,T,D = x.shape
+        B, T, D = x.shape
         q = self.q_proj(x)  # (B,T,2k)
-        q1,q2 = q.split(self.key_dim, dim=-1)
+        q1, q2 = q.split(self.key_dim, dim=-1)
         # scores
         s1 = torch.einsum('btk,nk->btn', q1, self.k1)  # (B,T,n1)
         s2 = torch.einsum('btk,nk->btn', q2, self.k2)  # (B,T,n2)
@@ -26,17 +33,17 @@ class PKMMemory(nn.Module):
         cand_scores = []
         for i in range(self.topk):
             for j in range(self.topk):
-                idx1 = top1.indices[:,:,i]
-                idx2 = top2.indices[:,:,j]
+                idx1 = top1.indices[:, :, i]
+                idx2 = top2.indices[:, :, j]
                 combined_index = idx1 * self.n2 + idx2
-                score = top1.values[:,:,i] + top2.values[:,:,j]
+                score = top1.values[:, :, i] + top2.values[:, :, j]
                 cand_scores.append(score)
                 val = self.values[combined_index]
                 cand_vals.append(val)
         scores = torch.stack(cand_scores, dim=-1)  # (B,T,K^2)
         vals = torch.stack(cand_vals, dim=-2)      # (B,T,K^2,val_dim)
         w = torch.softmax(scores, dim=-1)
-        retrieved = (w.unsqueeze(-1)*vals).sum(-2)  # (B,T,val_dim)
+        retrieved = (w.unsqueeze(-1) * vals).sum(-2)  # (B,T,val_dim)
         out = self.val_proj(retrieved)
         g = torch.sigmoid(self.gate(x))
-        return x + g*out
+        return x + g * self.dropout(out)

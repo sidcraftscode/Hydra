@@ -139,6 +139,17 @@ def train_mixture(model, device, vocab: Vocab, cfg: BenchConfig):
         x = x.to(device); y = y.to(device)
         logits = model(x)
         loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1), ignore_index=-100)
+        if hasattr(model, 'moe_stats') and model.moe_stats:
+            lb_terms = []
+            for stat in model.moe_stats:
+                usage = stat.get('usage', None)
+                if usage is not None:
+                    E = usage.numel()
+                    lb = (E * (usage ** 2).sum() - 1.0)
+                    lb_terms.append(lb)
+            if lb_terms:
+                # base_cfg is captured from outer scope; safe to use weight here
+                loss = loss + base_cfg.aux_load_balance_weight * torch.stack(lb_terms).mean()
         opt.zero_grad(); loss.backward(); opt.step()
         # LR schedule
         if step < cfg.warmup:
@@ -169,7 +180,23 @@ if __name__ == '__main__':
     random.seed(cfg.seed); torch.manual_seed(cfg.seed)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     vocab = Vocab(n_atoms=200)
-    base_cfg = HydraConfig(d=cfg.d, n_blocks=cfg.n_blocks, vocab_size=max(cfg.vocab_size, len(vocab)), moe_experts=4, moe_hidden=224, chunk_size=32, fast_ssm=True, disable_moe=False, disable_attn=False, vector_moe=True)
+    base_cfg = HydraConfig(
+        d=cfg.d,
+        n_blocks=cfg.n_blocks,
+        vocab_size=max(cfg.vocab_size, len(vocab)),
+        moe_experts=6,
+        moe_hidden=288,
+        chunk_size=32,
+        fast_ssm=True,
+        disable_moe=False,
+        disable_attn=False,
+        vector_moe=True,
+        n_heads=4,
+        attn_every=2,
+        gate_temp=0.8,
+        ssm_kernel=12,
+        aux_load_balance_weight=0.02,
+    )
 
     if os.environ.get('BENCH_QUICK'):
         cfg.train_steps = 6

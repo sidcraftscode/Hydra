@@ -177,14 +177,15 @@ class ChunkTop2MoE(nn.Module):
 
 # ------------------ Hydra Block ------------------
 class HydraBlock(nn.Module):
-    def __init__(self, d: int, use_attention: bool, use_moe: bool, n_heads=4, moe_experts=4, moe_hidden=192, chunk_size=32, fast_ssm=True, vector_moe=True, gate_temp: float = 1.0):
+    def __init__(self, d: int, use_attention: bool, use_moe: bool, n_heads=4, moe_experts=4, moe_hidden=192, chunk_size=32, fast_ssm=True, vector_moe=True, gate_temp: float = 1.0, ssm_kernel: int = 8):
         super().__init__()
-        self.ssm = FastSSM(d) if fast_ssm else SimpleSSM(d)
+        self.ssm = FastSSM(d, kernel_size=ssm_kernel) if fast_ssm else SimpleSSM(d)
         self.attn = SparseGlobalAttention(d, num_heads=n_heads, window=256) if use_attention else None
         self.moe = ChunkTop2MoE(d, n_experts=moe_experts, hidden=moe_hidden, chunk_size=chunk_size, full_parallel=vector_moe, temp=gate_temp) if use_moe else None
         self.g1 = nn.Parameter(torch.tensor(1.0))
-        self.g2 = nn.Parameter(torch.tensor(0.15 if use_attention else 0.0))
-        self.g3 = nn.Parameter(torch.tensor(0.5 if use_moe else 0.0))
+        # increase initial contributions for attention/MoE on reasoning tasks
+        self.g2 = nn.Parameter(torch.tensor(0.6 if use_attention else 0.0))
+        self.g3 = nn.Parameter(torch.tensor(0.6 if use_moe else 0.0))
         self.res_ln = nn.LayerNorm(d)
     def forward(self, x):
         ssm_out = self.ssm(x) * self.g1
@@ -219,6 +220,7 @@ class HydraConfig:
     use_pkm: bool = False
     gate_temp: float = 1.0  # new: temperature for MoE gate logits
     aux_load_balance_weight: float = 0.01  # coefficient for load balance loss
+    ssm_kernel: int = 12  # kernel size for FastSSM depthwise conv
 
 class ToyHydra(nn.Module):
     def __init__(self, cfg: HydraConfig):
@@ -236,7 +238,7 @@ class ToyHydra(nn.Module):
             blocks.append(HydraBlock(cfg.d, use_attn, use_moe, n_heads=cfg.n_heads,
                                      moe_experts=cfg.moe_experts, moe_hidden=cfg.moe_hidden,
                                      chunk_size=cfg.chunk_size, fast_ssm=cfg.fast_ssm, vector_moe=cfg.vector_moe,
-                                     gate_temp=cfg.gate_temp))
+                                     gate_temp=cfg.gate_temp, ssm_kernel=cfg.ssm_kernel))
         self.blocks = nn.ModuleList(blocks)
         self.workspace = WorkspaceMemory(cfg.d) if cfg.use_workspace else None
         self.pkm = PKMMemory(cfg.d) if cfg.use_pkm else None
