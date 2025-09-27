@@ -149,7 +149,7 @@ def train_mixture(model, device, vocab: Vocab, cfg: BenchConfig):
         x, y, _ = batchify(seqs, ans_pos, pad_id=0)
         x = x.to(device); y = y.to(device)
         logits = model(x)
-        loss = F.cross_entropy(logits.view(-1, len(vocab)), y.view(-1), ignore_index=-100)
+        loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1), ignore_index=-100)
         opt.zero_grad(); loss.backward(); opt.step()
         # Simple LR warmup + cosine
         if step < cfg.warmup:
