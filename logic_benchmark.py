@@ -4,6 +4,8 @@ import torch.optim as optim
 import numpy as np
 import matplotlib.pyplot as plt
 import random
+import csv
+import os
 
 # Toy Hydra Model
 class HydraHead(nn.Module):
@@ -226,6 +228,21 @@ def run_benchmark():
     plt.legend()
     plt.savefig('logic_benchmark_results.png')
     print("Benchmark finished. Plot saved to logic_benchmark_results.png")
+
+    # Save results to CSV
+    results_dir = 'results'
+    if not os.path.exists(results_dir):
+        os.makedirs(results_dir)
+    
+    csv_path = os.path.join(results_dir, 'logic_benchmark_accuracy.csv')
+    with open(csv_path, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['model', 'proof_length', 'accuracy'])
+        for name, accuracies in results.items():
+            for i, acc in enumerate(accuracies):
+                writer.writerow([name, chain_lengths[i], acc])
+    print(f"Results saved to {csv_path}")
+
 
 if __name__ == '__main__':
     run_benchmark()
