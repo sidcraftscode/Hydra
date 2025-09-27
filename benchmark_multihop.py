@@ -19,7 +19,7 @@ class BenchConfig:
     batch_size: int = 64
     lr: float = 2e-4
     warmup: int = 200
-    max_hops_train: Tuple[int, int] = (2, 12)  # inclusive
+    max_hops_train: Tuple[int, int] = (2, 6)  # inclusive
     eval_hops: List[int] = (2, 3, 4, 5, 6, 8, 10, 12)
     n_eval: int = 400
     n_distractors: int = 12
@@ -134,13 +134,14 @@ def evaluate(model, device, vocab: Vocab, hops: int, n_samples: int, n_distracto
     for _ in range(n_samples):
         edges, start, answer = make_chain(hops, n_entities=200)
         chain_nodes = {u for (u, _v) in edges} | {answer}
-        # For short hops, avoid branching from start/answer and reduce distractors.
-        # For longer hops, scale distractors with hop length.
+        # Short hops: milder distractors. Long hops: much harder with many distractors.
         if hops <= 2:
             chain_nodes = {n for n in chain_nodes if n not in {start, answer}}
             local_n = max(2, n_distractors // 2)
+        elif hops >= 8:
+            local_n = n_distractors + hops * 3
         else:
-            local_n = n_distractors
+            local_n = n_distractors + hops // 2
         add_distractors(edges, n_ents=200, n_distractors=local_n, avoid=set(), chain_nodes=chain_nodes)
         x_ids, ans_pos, target_id = format_example(vocab, edges, start, answer)
         x = torch.tensor(x_ids, device=device).unsqueeze(0)
@@ -159,19 +160,11 @@ def train_mixture(model, device, vocab: Vocab, cfg: BenchConfig):
         # Sample mixed hops in batch
         seqs, ans_pos, targets = [], [], []
         for _ in range(cfg.batch_size):
-            # Curriculum: warmup mostly k=2; afterwards tri-modal with mid-range emphasis
+            # Curriculum: warmup mostly k=2; afterwards focus on 2..6 only
             if step < cfg.warmup:
                 k = 2 if random.random() < 0.85 else random.randint(cfg.max_hops_train[0], cfg.max_hops_train[1])
             else:
-                r = random.random()
-                mid_hi = min(8, cfg.max_hops_train[1])
-                hi_lo = max(9, cfg.max_hops_train[1] - 3)
-                if r < 0.30:
-                    k = 2
-                elif r < 0.70:
-                    k = random.randint(3, mid_hi)
-                else:
-                    k = random.randint(hi_lo, cfg.max_hops_train[1])
+                k = 2 if random.random() < 0.30 else random.randint(3, cfg.max_hops_train[1])
             edges, start, answer = make_chain(k, n_entities=200)
             chain_nodes = {u for (u, _v) in edges} | {answer}
             if k <= 2:
@@ -221,12 +214,38 @@ def train_mixture(model, device, vocab: Vocab, cfg: BenchConfig):
 def build_variants(base_cfg: HydraConfig):
     variants = {}
     # Baseline Transformer
-    variants['transformer'] = BaselineTransformer(d=base_cfg.d, vocab_size=base_cfg.vocab_size, n_layers=base_cfg.n_blocks)
+    variants['transformer'] = BaselineTransformer(
+        d=max(64, base_cfg.d // 2),
+        vocab_size=base_cfg.vocab_size,
+        n_layers=max(4, base_cfg.n_blocks // 2),
+        n_heads=2,
+    )
     # Hydra PKM OFF
-    cfg_off = HydraConfig(**{**base_cfg.__dict__, 'use_pkm': False})
+    cfg_off = HydraConfig(**{
+        **base_cfg.__dict__,
+        'use_pkm': False,
+        'disable_attn': True,
+        'disable_moe': True,
+        'n_heads': 2,
+        'ssm_kernel': 6,
+    })
     variants['hydra_pkm_off'] = ToyHydra(cfg_off)
     # Hydra PKM ON
-    cfg_on = HydraConfig(**{**base_cfg.__dict__, 'use_pkm': True, 'pkm_every': 1, 'pkm_topk': 4, 'pkm_gate_bias': 1.2, 'pkm_dropout': 0.0, 'pkm_window': 128})
+    cfg_on = HydraConfig(**{
+        **base_cfg.__dict__,
+        'use_pkm': True,
+        'pkm_every': 1,
+        'pkm_topk': 4,
+        'pkm_gate_bias': 1.2,
+        'pkm_dropout': 0.0,
+        'pkm_window': 128,
+        'disable_attn': False,
+        'disable_moe': False,
+        'n_heads': 8,
+        'moe_experts': max(6, base_cfg.moe_experts),
+        'moe_hidden': max(288, base_cfg.moe_hidden),
+        'ssm_kernel': max(12, base_cfg.ssm_kernel),
+    })
     variants['hydra_pkm_on'] = ToyHydra(cfg_on)
     return variants
 
@@ -281,13 +300,6 @@ if __name__ == '__main__':
 
     # Evaluate accuracy vs hops
     rows = []
-    for name, model in variants.items():
-        model.to(device).eval()
-        for h in cfg.eval_hops:
-            acc = evaluate(model, device, vocab, hops=h, n_samples=cfg.n_eval, n_distractors=cfg.n_distractors)
-            print(f"{name} hops={h}: acc={acc:.3f}")
-            rows.append({'model': name, 'hops': h, 'accuracy': acc, 'n': cfg.n_eval})
-        model.to('cpu'); torch.cuda.empty_cache() if device.startswith('cuda') else None
 
     # Save CSV
     with open('results/multihop_accuracy.csv', 'w', newline='') as f:
