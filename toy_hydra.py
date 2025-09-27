@@ -237,16 +237,27 @@ class ToyHydra(nn.Module):
         for i in range(cfg.n_blocks):
             use_attn = (not cfg.disable_attn) and ((i + 1) % cfg.attn_every == 0)
             use_moe = (not cfg.disable_moe) and (i in moe_on)
-            blocks.append(HydraBlock(cfg.d, use_attn, use_moe, n_heads=cfg.n_heads,
-                                     moe_experts=cfg.moe_experts, moe_hidden=cfg.moe_hidden,
-                                     chunk_size=cfg.chunk_size, fast_ssm=cfg.fast_ssm, vector_moe=cfg.vector_moe,
-                                     gate_temp=cfg.gate_temp, ssm_kernel=cfg.ssm_kernel))
-    self.blocks = nn.ModuleList(blocks)
-    self.workspace = WorkspaceMemory(cfg.d) if cfg.use_workspace else None
-    self.pkm = PKMMemory(cfg.d, topk=cfg.pkm_topk) if cfg.use_pkm else None
-    self.ln_f = nn.LayerNorm(cfg.d)
-    self.head = nn.Linear(cfg.d, cfg.vocab_size, bias=False)
-    self.head.weight = self.embed.weight
+            blocks.append(
+                HydraBlock(
+                    cfg.d,
+                    use_attn,
+                    use_moe,
+                    n_heads=cfg.n_heads,
+                    moe_experts=cfg.moe_experts,
+                    moe_hidden=cfg.moe_hidden,
+                    chunk_size=cfg.chunk_size,
+                    fast_ssm=cfg.fast_ssm,
+                    vector_moe=cfg.vector_moe,
+                    gate_temp=cfg.gate_temp,
+                    ssm_kernel=cfg.ssm_kernel,
+                )
+            )
+        self.blocks = nn.ModuleList(blocks)
+        self.workspace = WorkspaceMemory(cfg.d) if cfg.use_workspace else None
+        self.pkm = PKMMemory(cfg.d, topk=cfg.pkm_topk) if cfg.use_pkm else None
+        self.ln_f = nn.LayerNorm(cfg.d)
+        self.head = nn.Linear(cfg.d, cfg.vocab_size, bias=False)
+        self.head.weight = self.embed.weight
     def forward(self, idx):
         x = self.embed(idx)
         self.moe_stats = []
