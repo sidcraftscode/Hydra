@@ -17,6 +17,7 @@ Important: These scripts are illustrative and operate at small scale on syntheti
 - `run_long_context.py` — Long-context throughput/memory runs (1k–16k tokens).
 - `speedup_summary.py` — Aggregates benchmark outputs and renders speedup tables.
 - `plot_results.py` — Plots figures from consolidated results.
+- `logic_benchmark.py` — Logic composition benchmark (implication chains) comparing Hydra workspace ON/OFF vs Transformer.
 
 Outputs are written to a `results/` folder (see paper’s Reproducibility section for exact filenames).
 
@@ -45,6 +46,15 @@ Examples:
   python run_long_context.py
   ```
 
+- Logic composition benchmark (implication chains)
+  - Generates chains like `A->B, B->C, C->D`, queries `A->?`, and measures accuracy vs proof length (2–5 steps).
+  - Compares three models: Hydra workspace ON, Hydra workspace OFF, and Transformer baseline with similar parameter scale.
+  - Results saved to `results/logic_composition_accuracy.csv`.
+  
+  ```bash
+  python logic_benchmark.py
+  ```
+
 - Aggregate speedups and render a markdown table/JSON
   
   ```bash
@@ -60,6 +70,7 @@ Examples:
 Notes:
 - Default toy config uses d=256, 8 blocks, attention every 4th block, MoE on even blocks, Top-2 routing.
 - Scripts generate CSV/JSON artifacts such as `throughput_summary.csv`, `speedup_summary.json`, `train_losses.csv` in `results/`.
+ - Logic benchmark trains on lengths 2–4 and evaluates on 2–5. Workspace memory is reset per batch for fairness. Expect Hydra workspace ON > Hydra workspace OFF > Transformer as proof length increases.
 
 ## Citation
 If you use this code, please cite the paper:
