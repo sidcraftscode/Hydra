@@ -172,11 +172,12 @@ def train_mixture(model, device, vocab: Vocab, cfg: BenchConfig):
             ans_pos.append(ap)
             targets.append(tgt)
         x, y, _ = batchify(seqs, ans_pos, targets, pad_id=0)
-        x = x.to(device); y = y.to(device)
+        x = x.to(device)
+        y = y.to(device)
         logits = model(x)
         loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1), ignore_index=-100)
         # MoE aux loss (if available)
-    if hasattr(model, 'moe_stats') and model.moe_stats:
+        if hasattr(model, 'moe_stats') and model.moe_stats:
             lb_terms = []
             for stat in model.moe_stats:
                 usage = stat.get('usage', None)
@@ -185,9 +186,10 @@ def train_mixture(model, device, vocab: Vocab, cfg: BenchConfig):
                     lb = (E * (usage ** 2).sum() - 1.0)
                     lb_terms.append(lb)
             if lb_terms:
-        w = getattr(getattr(model, 'cfg', object()), 'aux_load_balance_weight', 0.02)
-        loss = loss + w * torch.stack(lb_terms).mean()
-        opt.zero_grad(); loss.backward()
+                w = getattr(getattr(model, 'cfg', object()), 'aux_load_balance_weight', 0.02)
+                loss = loss + w * torch.stack(lb_terms).mean()
+        opt.zero_grad()
+        loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         opt.step()
         # Simple LR warmup + cosine
