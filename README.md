@@ -17,6 +17,8 @@ Important: These scripts are illustrative and operate at small scale on syntheti
 - `run_long_context.py` — Long-context throughput/memory runs (1k–16k tokens).
 - `speedup_summary.py` — Aggregates benchmark outputs and renders speedup tables.
 - `plot_results.py` — Plots figures from consolidated results.
+- `benchmark_multihop.py` — Multi-hop lookup benchmark (PKM ON vs OFF vs Transformer).
+- `benchmark_logic.py` — Logic composition benchmark (Workspace ON vs OFF vs Transformer).
 
 Outputs are written to a `results/` folder (see paper’s Reproducibility section for exact filenames).
 
@@ -57,9 +59,22 @@ Examples:
   python plot_results.py
   ```
 
+- Multi-hop lookup (accuracy vs hops)
+  
+  ```bash
+  python benchmark_multihop.py
+  ```
+
+- Logic composition (accuracy vs proof length)
+  
+  ```bash
+  python benchmark_logic.py
+  ```
+
 Notes:
 - Default toy config uses d=256, 8 blocks, attention every 4th block, MoE on even blocks, Top-2 routing.
 - Scripts generate CSV/JSON artifacts such as `throughput_summary.csv`, `speedup_summary.json`, `train_losses.csv` in `results/`.
+  Additional: `multihop_accuracy.csv`, `logic_accuracy.csv`, and figures `fig_multihop_accuracy.png`, `fig_logic_accuracy.png`.
 
 ## Citation
 If you use this code, please cite the paper:
