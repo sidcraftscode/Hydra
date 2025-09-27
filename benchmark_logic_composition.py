@@ -34,13 +34,18 @@ def make_vocab(n_atoms: int = 512) -> LogicVocab:
 
 # ------------------ Data ------------------
 def gen_implication_chain(start: int, length: int, vocab: LogicVocab, max_atom: int,
-                          distractors: int = 96, interleave_noise: bool = True, scratch_fraction: float = 0.6) -> Tuple[List[int], int]:
+                          distractors: int = 128, interleave_noise: bool = True, scratch_fraction: float = 0.6) -> Tuple[List[int], int]:
     chain: List[Tuple[int,int]] = []
     cur = start
+    used = {cur}
     for _ in range(length):
-        nxt = (cur + 1) % max_atom
+        for _try in range(8):
+            nxt = random.randrange(0, max_atom)
+            if nxt not in used:
+                break
         chain.append((cur, nxt))
         cur = nxt
+        used.add(cur)
     target = cur
 
     facts: List[Tuple[int,int]] = chain.copy()
@@ -80,11 +85,13 @@ def gen_implication_chain(start: int, length: int, vocab: LogicVocab, max_atom: 
         tokens.append(vocab.scratch)
         cur = start
         for _ in range(length):
-            nxt = (cur + 1) % max_atom
+            # replay the true chain from 'chain'
+            nxt = chain[_][1]
             tokens.extend([cur, vocab.implies, nxt, vocab.semi])
             cur = nxt
 
-    tokens.extend([vocab.query, start, vocab.implies, vocab.eq, target])
+    # query without the answer token; answer is predicted at the <eq> position
+    tokens.extend([vocab.query, start, vocab.implies, vocab.eq])
     return tokens, target
 
 

@@ -39,26 +39,33 @@ def make_vocab(n_entities: int = 512) -> Vocab:
 
 
 # ------------------ Data generation ------------------
-def gen_chain_sequence(start: int, hops: int, vocab: Vocab, max_entity: int, distractors: int = 64,
+def gen_chain_sequence(start: int, hops: int, vocab: Vocab, max_entity: int, distractors: int = 160,
                        scratch_fraction: float = 0.7) -> Tuple[List[int], int]:
     """Create one sequence encoding a chain window with distractor facts and a final query.
 
     Returns tokens list and target entity id for final answer.
     """
-    # Ground-truth chain is linear: i -> i+1 (mod max_entity)
-    facts: List[Tuple[int,int]] = []
-    # include a window of relevant facts spanning the chain path
+    # Ground-truth chain with random next hops unique to this instance
+    chain_edges: List[Tuple[int,int]] = []
     cur = start
     path = [cur]
+    used_nodes = {cur}
     for _ in range(hops):
-        nxt = (cur + 1) % max_entity
-        facts.append((cur, nxt))
-        path.append(nxt)
-        cur = nxt
+        # sample next distinct node not in path to avoid trivial arithmetic rule
+        # try up to few times
+        for _try in range(8):
+            nxt = random.randrange(0, max_entity)
+            if nxt not in used_nodes:
+                break
+    used_nodes.add(nxt)
+    chain_edges.append((cur, nxt))
+    path.append(nxt)
+    cur = nxt
     target = cur
 
     # Add distractor edges sampled far from the path
     used = set(path)
+    facts: List[Tuple[int,int]] = chain_edges.copy()
     for _ in range(distractors):
         a = random.randrange(0, max_entity)
         # try sampling away from path to avoid trivial cues
@@ -75,17 +82,14 @@ def gen_chain_sequence(start: int, hops: int, vocab: Vocab, max_entity: int, dis
     for a, b in facts:
         tokens.extend([a, vocab.arrow, b, vocab.semi])
 
-    # Scratch steps (optional noisy chain-of-thought hints)
+    # Scratch steps (optional chain-of-thought hints)
     if random.random() < scratch_fraction:
         tokens.append(vocab.scratch)
-        cur = start
-        for _ in range(hops):
-            nxt = (cur + 1) % max_entity
-            tokens.extend([cur, vocab.arrow, nxt, vocab.semi])
-            cur = nxt
+        for a,b in chain_edges:
+            tokens.extend([a, vocab.arrow, b, vocab.semi])
 
-    # Append query and equal sign with answer position placeholder
-    tokens.extend([vocab.q, start, vocab.arrow, vocab.eq, target])
+    # Append query and equal sign sentinel (NO target token in input)
+    tokens.extend([vocab.q, start, vocab.arrow, vocab.eq])
     return tokens, target
 
 
@@ -113,7 +117,7 @@ def train_task(model, vocab_size: int, data_fn, device: str, steps=1500, B=32,
             targets.append(tgt)
         x = batchify(examples, pad_id).to(device)
         logits = model(x)
-        # Loss on final answer token only: that's the last real token per example
+        # Loss on final answer at the <eq> position (last token)
         lengths = torch.tensor([len(t) for t in examples], device=device)
         idx = (lengths - 1)
         # Cross-entropy at final position per example
@@ -123,8 +127,7 @@ def train_task(model, vocab_size: int, data_fn, device: str, steps=1500, B=32,
         opt.zero_grad(); loss.backward(); opt.step()
         if step < warmup:
             for g in opt.param_groups: g['lr'] = lr * (step + 1) / max(1, warmup)
-        elif step % 200 == 0:
-            pass
+        
 
 
 @torch.no_grad()
