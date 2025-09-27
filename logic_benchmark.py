@@ -42,6 +42,7 @@ def generate_example(k, num_distractors=5):
     random.shuffle(all_premises)
     premises_str = '.'.join(all_premises) + '.'
     query = f'{chain_vars[0]}->'
+    target = chain_vars[k]
     full = premises_str + query + target
     tokens = tokenize(full)
     target_id = token_to_id[target]
