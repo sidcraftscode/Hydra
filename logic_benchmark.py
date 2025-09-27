@@ -27,7 +27,7 @@ def tokenize(s):
             i += 1  # skip invalid
     return [token_to_id[t] for t in tokens if t in token_to_id]
 
-def generate_example(k, num_distractors=5):
+def generate_example(k, num_distractors=15):
     vars_list = list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
     chain_vars = vars_list[:k+1]
     distractor_vars = vars_list[k+1:]
@@ -117,15 +117,15 @@ if __name__ == '__main__':
     
     # Generate train data
     train_data = []
-    for k in range(2, 6):
+    for k in range(2, 7):
         for _ in range(2000):
             tokens, _ = generate_example(k)
             train_data.append(tokens)
     random.shuffle(train_data)
     
     # Generate test data
-    test_data = {k: [] for k in range(2, 6)}
-    for k in range(2, 6):
+    test_data = {k: [] for k in range(2, 7)}
+    for k in range(2, 7):
         for _ in range(100):
             tokens, target = generate_example(k)
             test_data[k].append((tokens, target))
@@ -134,7 +134,7 @@ if __name__ == '__main__':
     results = {}
     for name, model in variants.items():
         print(f'Training {name}...')
-        losses = train_logic(model.to(device), train_data, device, steps=2000, B=16)
+        losses = train_logic(model.to(device), train_data, device, steps=1000, B=16)
         accuracies = evaluate_logic(model, test_data, device)
         results[name] = {'losses': losses, 'accuracies': accuracies}
         model.to('cpu')
