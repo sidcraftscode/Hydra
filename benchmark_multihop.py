@@ -51,10 +51,10 @@ class Vocab:
 
 
 # ------------------ Data generation ------------------
-def make_chain(k: int) -> Tuple[List[Tuple[int, int]], int, int]:
+def make_chain(k: int, n_entities: int = 200) -> Tuple[List[Tuple[int, int]], int, int]:
     """Return list of directed edges (u->v) forming chain length k, start entity id, answer entity id.
-    Entities are represented by integer indices starting from 1 (to map to E#)."""
-    start = 1
+    Start is randomized to avoid mapping hops->answer trivially."""
+    start = random.randint(1, max(1, n_entities - k))
     edges = []
     for i in range(k):
         edges.append((start + i, start + i + 1))
@@ -75,10 +75,10 @@ def add_distractors(edges: List[Tuple[int, int]], n_ents: int, n_distractors: in
         ds += 1
 
 
-def format_example(vocab: Vocab, edges: List[Tuple[int, int]], start_ent: int, answer_ent: int, include_scratch: bool = True) -> Tuple[List[int], int]:
-    """Return tokenized example and index of the answer token position.
-    Layout: <facts> E# -> E# ; ... </facts> <scratch> E# -> E# ; ... </scratch> <q> E# -> ? </q> <ans> E#
-    Answer position is the last token (E# after <ans>)."""
+def format_example(vocab: Vocab, edges: List[Tuple[int, int]], start_ent: int, answer_ent: int, include_scratch: bool = True) -> Tuple[List[int], int, int]:
+    """Return tokenized example, position to predict (the <ans> index), and target token id.
+    Layout: <facts> ... </facts> <scratch> ... </scratch> <q> E# -> ? </q> <ans>
+    The model must predict E{answer} as the NEXT token after <ans> (standard causal LM shift)."""
     # Shuffle facts (multi-hop lookup requires unordered KB)
     facts = edges.copy()
     random.shuffle(facts)
@@ -94,13 +94,14 @@ def format_example(vocab: Vocab, edges: List[Tuple[int, int]], start_ent: int, a
             toks += [f'E{u}', '->', f'E{v}', ';']
         toks += ['</scratch>']
     toks += ['<q>', f'E{start_ent}', '->', '?', '</q>']
-    toks += ['<ans>', f'E{answer_ent}']
+    toks += ['<ans>']
     x = vocab.encode(toks)
-    answer_pos = len(x) - 1
-    return x, answer_pos
+    ans_pos = len(x) - 1  # index of <ans>
+    target_id = vocab.tok2id[f'E{answer_ent}']
+    return x, ans_pos, target_id
 
 
-def batchify(seqs: List[List[int]], answer_pos: List[int], pad_id: int = 0) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+def batchify(seqs: List[List[int]], answer_pos: List[int], targets: List[int], pad_id: int = 0) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     T = max(len(s) for s in seqs)
     B = len(seqs)
     x = torch.full((B, T), pad_id, dtype=torch.long)
@@ -108,8 +109,8 @@ def batchify(seqs: List[List[int]], answer_pos: List[int], pad_id: int = 0) -> T
     mask = torch.zeros((B, T), dtype=torch.bool)
     for i, s in enumerate(seqs):
         x[i, : len(s)] = torch.tensor(s, dtype=torch.long)
-        # target only at answer position
-        y[i, answer_pos[i]] = x[i, answer_pos[i]]
+        # target only at answer position (predict next token after <ans>)
+        y[i, answer_pos[i]] = targets[i]
         mask[i, : len(s)] = 1
     return x, y, mask
 
@@ -121,13 +122,13 @@ def evaluate(model, device, vocab: Vocab, hops: int, n_samples: int, n_distracto
     correct = 0
     total = 0
     for _ in range(n_samples):
-        edges, start, answer = make_chain(hops)
+        edges, start, answer = make_chain(hops, n_entities=200)
         add_distractors(edges, n_ents=200, n_distractors=n_distractors, avoid=set([start, answer]))
-        x_ids, ans_pos = format_example(vocab, edges, start, answer)
+        x_ids, ans_pos, target_id = format_example(vocab, edges, start, answer)
         x = torch.tensor(x_ids, device=device).unsqueeze(0)
         logits = model(x)
         pred = logits[0, ans_pos].argmax(-1).item()
-        if pred == vocab.tok2id[f'E{answer}']:
+        if pred == target_id:
             correct += 1
         total += 1
     return correct / max(1, total)
@@ -138,15 +139,16 @@ def train_mixture(model, device, vocab: Vocab, cfg: BenchConfig):
     opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr)
     for step in range(cfg.train_steps):
         # Sample mixed hops in batch
-        seqs, ans_pos = [], []
+        seqs, ans_pos, targets = [], [], []
         for _ in range(cfg.batch_size):
             k = random.randint(cfg.max_hops_train[0], cfg.max_hops_train[1])
-            edges, start, answer = make_chain(k)
+            edges, start, answer = make_chain(k, n_entities=200)
             add_distractors(edges, n_ents=200, n_distractors=cfg.n_distractors, avoid=set([start, answer]))
-            x_ids, ap = format_example(vocab, edges, start, answer)
+            x_ids, ap, tgt = format_example(vocab, edges, start, answer)
             seqs.append(x_ids)
             ans_pos.append(ap)
-        x, y, _ = batchify(seqs, ans_pos, pad_id=0)
+            targets.append(tgt)
+        x, y, _ = batchify(seqs, ans_pos, targets, pad_id=0)
         x = x.to(device); y = y.to(device)
         logits = model(x)
         loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1), ignore_index=-100)
