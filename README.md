@@ -14,6 +14,7 @@ Important: These scripts are illustrative and operate at small scale on syntheti
 - `workspace_memory.py` — Latent workspace memory (read/write) toy implementation.
 - `pkm_memory.py` — Product-Key Memory (PKM) toy layer and helpers.
 - `logic_benchmark.py` — Logic composition benchmark (implication chains).
+- `pkm_benchmark.py` — PKM selective activation benchmark (open-book vs. closed-book).
 - `fairness_benchmark.py` — Training loop and short-context throughput benchmark on synthetic tasks.
 - `run_long_context.py` — Long-context throughput/memory runs (1k–16k tokens).
 - `speedup_summary.py` — Aggregates benchmark outputs and renders speedup tables.
@@ -34,10 +35,22 @@ Create an environment and install dependencies, then run any of the scripts belo
 
 Examples:
 
-- Run benchmark + training (default)
+- Run fairness benchmark + training (default)
   
   ```bash
   python fairness_benchmark.py
+  ```
+
+- Run logic benchmark
+  
+  ```bash
+  python logic_benchmark.py
+  ```
+
+- Run PKM benchmark
+  
+  ```bash
+  python pkm_benchmark.py
   ```
 
 - Long-context benchmark (1k–16k)

@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from workspace_memory import WorkspaceMemory
-from pkm_memory import PKMMemory
+from pkm_memory import PKM
 
 # ------------------ Utility ------------------
 
@@ -239,7 +239,7 @@ class ToyHydra(nn.Module):
                                      gate_temp=cfg.gate_temp))
         self.blocks = nn.ModuleList(blocks)
         self.workspace = WorkspaceMemory(cfg.d) if cfg.use_workspace else None
-        self.pkm = PKMMemory(cfg.d) if cfg.use_pkm else None
+        self.pkm = PKM(cfg.d) if cfg.use_pkm else None
         self.ln_f = nn.LayerNorm(cfg.d)
         self.head = nn.Linear(cfg.d, cfg.vocab_size, bias=False)
         self.head.weight = self.embed.weight
