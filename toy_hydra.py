@@ -220,6 +220,8 @@ class HydraConfig:
     use_pkm: bool = False
     pkm_every: int = 4
     pkm_topk: int = 2
+    pkm_gate_bias: Optional[float] = None
+    pkm_dropout: float = 0.05
     gate_temp: float = 1.0  # new: temperature for MoE gate logits
     aux_load_balance_weight: float = 0.01  # coefficient for load balance loss
     ssm_kernel: int = 12  # kernel size for FastSSM depthwise conv
@@ -255,6 +257,13 @@ class ToyHydra(nn.Module):
         self.blocks = nn.ModuleList(blocks)
         self.workspace = WorkspaceMemory(cfg.d) if cfg.use_workspace else None
         self.pkm = PKMMemory(cfg.d, topk=cfg.pkm_topk) if cfg.use_pkm else None
+        if self.pkm is not None:
+            # Optional override of gate bias/dropout
+            if cfg.pkm_gate_bias is not None and getattr(self.pkm.gate, 'bias', None) is not None:
+                with torch.no_grad():
+                    self.pkm.gate.bias.fill_(cfg.pkm_gate_bias)
+            if hasattr(self.pkm, 'dropout'):
+                self.pkm.dropout.p = float(getattr(cfg, 'pkm_dropout', 0.05))
         self.ln_f = nn.LayerNorm(cfg.d)
         self.head = nn.Linear(cfg.d, cfg.vocab_size, bias=False)
         self.head.weight = self.embed.weight

@@ -213,7 +213,7 @@ def build_variants(base_cfg: HydraConfig):
     cfg_off = HydraConfig(**{**base_cfg.__dict__, 'use_pkm': False})
     variants['hydra_pkm_off'] = ToyHydra(cfg_off)
     # Hydra PKM ON
-    cfg_on = HydraConfig(**{**base_cfg.__dict__, 'use_pkm': True})
+    cfg_on = HydraConfig(**{**base_cfg.__dict__, 'use_pkm': True, 'pkm_every': 2, 'pkm_topk': 2, 'pkm_gate_bias': -0.5, 'pkm_dropout': 0.02})
     variants['hydra_pkm_on'] = ToyHydra(cfg_on)
     return variants
 
@@ -300,7 +300,6 @@ if __name__ == '__main__':
         plt.grid(True, alpha=0.3)
         plt.legend()
         plt.tight_layout()
-        plt.savefig('results/fig_multihop_accuracy.png', dpi=150)
         print('Saved results/fig_multihop_accuracy.png')
     except Exception as e:
         print('Plotting failed:', e)
