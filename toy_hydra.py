@@ -218,6 +218,8 @@ class HydraConfig:
     vector_moe: bool = True  # new flag
     use_workspace: bool = False
     use_pkm: bool = False
+    pkm_every: int = 4
+    pkm_topk: int = 2
     gate_temp: float = 1.0  # new: temperature for MoE gate logits
     aux_load_balance_weight: float = 0.01  # coefficient for load balance loss
     ssm_kernel: int = 12  # kernel size for FastSSM depthwise conv
@@ -239,16 +241,16 @@ class ToyHydra(nn.Module):
                                      moe_experts=cfg.moe_experts, moe_hidden=cfg.moe_hidden,
                                      chunk_size=cfg.chunk_size, fast_ssm=cfg.fast_ssm, vector_moe=cfg.vector_moe,
                                      gate_temp=cfg.gate_temp, ssm_kernel=cfg.ssm_kernel))
-        self.blocks = nn.ModuleList(blocks)
-        self.workspace = WorkspaceMemory(cfg.d) if cfg.use_workspace else None
-        self.pkm = PKMMemory(cfg.d) if cfg.use_pkm else None
-        self.ln_f = nn.LayerNorm(cfg.d)
-        self.head = nn.Linear(cfg.d, cfg.vocab_size, bias=False)
-        self.head.weight = self.embed.weight
+    self.blocks = nn.ModuleList(blocks)
+    self.workspace = WorkspaceMemory(cfg.d) if cfg.use_workspace else None
+    self.pkm = PKMMemory(cfg.d, topk=cfg.pkm_topk) if cfg.use_pkm else None
+    self.ln_f = nn.LayerNorm(cfg.d)
+    self.head = nn.Linear(cfg.d, cfg.vocab_size, bias=False)
+    self.head.weight = self.embed.weight
     def forward(self, idx):
         x = self.embed(idx)
         self.moe_stats = []
-        for blk in self.blocks:
+        for i, blk in enumerate(self.blocks):
             x = blk(x)
             if getattr(blk, 'moe', None) is not None and blk.moe.last_logits is not None:
                 self.moe_stats.append({
@@ -259,7 +261,7 @@ class ToyHydra(nn.Module):
                 })
             if self.workspace is not None:
                 x = self.workspace(x)
-            if self.pkm is not None:
+            if self.pkm is not None and (i + 1) % self.cfg.pkm_every == 0:
                 x = self.pkm(x)
         x = self.ln_f(x)
         return self.head(x)
