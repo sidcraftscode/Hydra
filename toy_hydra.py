@@ -222,6 +222,7 @@ class HydraConfig:
     pkm_topk: int = 2
     pkm_gate_bias: Optional[float] = None
     pkm_dropout: float = 0.05
+    pkm_window: Optional[int] = None  # if set, apply PKM only to last W tokens
     gate_temp: float = 1.0  # new: temperature for MoE gate logits
     aux_load_balance_weight: float = 0.01  # coefficient for load balance loss
     ssm_kernel: int = 12  # kernel size for FastSSM depthwise conv
@@ -282,7 +283,13 @@ class ToyHydra(nn.Module):
             if self.workspace is not None:
                 x = self.workspace(x)
             if self.pkm is not None and (i + 1) % self.cfg.pkm_every == 0:
-                x = self.pkm(x)
+                W = getattr(self.cfg, 'pkm_window', None)
+                if W is not None and x.size(1) > W:
+                    x_tail = x[:, -W:, :]
+                    x_tail = self.pkm(x_tail)
+                    x = torch.cat([x[:, :-W, :], x_tail], dim=1)
+                else:
+                    x = self.pkm(x)
         x = self.ln_f(x)
         return self.head(x)
 

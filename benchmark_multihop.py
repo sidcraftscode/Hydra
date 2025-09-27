@@ -225,7 +225,7 @@ def build_variants(base_cfg: HydraConfig):
     cfg_off = HydraConfig(**{**base_cfg.__dict__, 'use_pkm': False})
     variants['hydra_pkm_off'] = ToyHydra(cfg_off)
     # Hydra PKM ON
-    cfg_on = HydraConfig(**{**base_cfg.__dict__, 'use_pkm': True, 'pkm_every': 1, 'pkm_topk': 4, 'pkm_gate_bias': 1.2, 'pkm_dropout': 0.0})
+    cfg_on = HydraConfig(**{**base_cfg.__dict__, 'use_pkm': True, 'pkm_every': 1, 'pkm_topk': 4, 'pkm_gate_bias': 1.2, 'pkm_dropout': 0.0, 'pkm_window': 128})
     variants['hydra_pkm_on'] = ToyHydra(cfg_on)
     return variants
 
