@@ -9,14 +9,13 @@ import torch.nn.functional as F
 
 from toy_hydra import HydraConfig, ToyHydra, BaselineTransformer, count_parameters
 
-
 # ------------------ Config ------------------
 @dataclass
 class BenchConfig:
     d: int = 224
     n_blocks: int = 8
     vocab_size: int = 2000
-    train_steps: int = 2200
+    train_steps: int = 1800
     batch_size: int = 64
     lr: float = 2e-4
     warmup: int = 200
@@ -135,7 +134,13 @@ def evaluate(model, device, vocab: Vocab, hops: int, n_samples: int, n_distracto
     for _ in range(n_samples):
         edges, start, answer = make_chain(hops, n_entities=200)
         chain_nodes = {u for (u, _v) in edges} | {answer}
-        add_distractors(edges, n_ents=200, n_distractors=n_distractors, avoid=set(), chain_nodes=chain_nodes)
+        # For short hops, avoid branching from start and reduce distractors
+        if hops <= 2:
+            chain_nodes = {n for n in chain_nodes if n != start}
+            local_n = max(2, n_distractors // 2)
+        else:
+            local_n = n_distractors
+        add_distractors(edges, n_ents=200, n_distractors=local_n, avoid=set(), chain_nodes=chain_nodes)
         x_ids, ans_pos, target_id = format_example(vocab, edges, start, answer)
         x = torch.tensor(x_ids, device=device).unsqueeze(0)
         logits = model(x)
@@ -156,7 +161,12 @@ def train_mixture(model, device, vocab: Vocab, cfg: BenchConfig):
             k = random.randint(cfg.max_hops_train[0], cfg.max_hops_train[1])
             edges, start, answer = make_chain(k, n_entities=200)
             chain_nodes = {u for (u, _v) in edges} | {answer}
-            add_distractors(edges, n_ents=200, n_distractors=cfg.n_distractors, avoid=set(), chain_nodes=chain_nodes)
+            if k <= 2:
+                chain_nodes = {n for n in chain_nodes if n != start}
+                local_n = max(2, cfg.n_distractors // 2)
+            else:
+                local_n = cfg.n_distractors
+            add_distractors(edges, n_ents=200, n_distractors=local_n, avoid=set(), chain_nodes=chain_nodes)
             x_ids, ap, tgt = format_example(vocab, edges, start, answer)
             seqs.append(x_ids)
             ans_pos.append(ap)
@@ -166,7 +176,7 @@ def train_mixture(model, device, vocab: Vocab, cfg: BenchConfig):
         logits = model(x)
         loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1), ignore_index=-100)
         # MoE aux loss (if available)
-        if hasattr(model, 'moe_stats') and model.moe_stats:
+    if hasattr(model, 'moe_stats') and model.moe_stats:
             lb_terms = []
             for stat in model.moe_stats:
                 usage = stat.get('usage', None)
@@ -175,7 +185,8 @@ def train_mixture(model, device, vocab: Vocab, cfg: BenchConfig):
                     lb = (E * (usage ** 2).sum() - 1.0)
                     lb_terms.append(lb)
             if lb_terms:
-                loss = loss + base_cfg.aux_load_balance_weight * torch.stack(lb_terms).mean()
+        w = getattr(getattr(model, 'cfg', object()), 'aux_load_balance_weight', 0.02)
+        loss = loss + w * torch.stack(lb_terms).mean()
         opt.zero_grad(); loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         opt.step()
