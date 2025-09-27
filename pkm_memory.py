@@ -46,4 +46,6 @@ class PKMMemory(nn.Module):
         retrieved = (w.unsqueeze(-1) * vals).sum(-2)  # (B,T,val_dim)
         out = self.val_proj(retrieved)
         g = torch.sigmoid(self.gate(x))
+        # Expose mean gate for optional regularization
+        self.last_gate_mean = g.mean().detach()
         return x + g * self.dropout(out)
