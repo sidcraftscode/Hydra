@@ -13,7 +13,21 @@ vocab_size = len(vocab)
 token_to_id = {t: i for i, t in enumerate(vocab)}
 id_to_token = {i: t for t, i in token_to_id.items()}
 
-def generate_example(k, num_distractors=20):
+def tokenize(s):
+    tokens = []
+    i = 0
+    while i < len(s):
+        if s[i:i+2] == '->':
+            tokens.append('->')
+            i += 2
+        elif s[i] in token_to_id:
+            tokens.append(s[i])
+            i += 1
+        else:
+            i += 1  # skip invalid
+    return [token_to_id[t] for t in tokens if t in token_to_id]
+
+def generate_example(k, num_distractors=5):
     vars_list = list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
     chain_vars = vars_list[:k+1]
     distractor_vars = vars_list[k+1:]
@@ -29,7 +43,7 @@ def generate_example(k, num_distractors=20):
     premises_str = '.'.join(all_premises) + '.'
     query = f'{chain_vars[0]}->'
     full = premises_str + query
-    tokens = [token_to_id.get(char, token_to_id['<pad>']) for char in full]
+    tokens = tokenize(full)
     target = chain_vars[k]
     target_id = token_to_id[target]
     return tokens, target_id
@@ -104,7 +118,7 @@ if __name__ == '__main__':
     # Generate train data
     train_data = []
     for k in range(2, 6):
-        for _ in range(1000):
+        for _ in range(2000):
             tokens, _ = generate_example(k)
             train_data.append(tokens)
     random.shuffle(train_data)
@@ -120,7 +134,7 @@ if __name__ == '__main__':
     results = {}
     for name, model in variants.items():
         print(f'Training {name}...')
-        losses = train_logic(model.to(device), train_data, device, steps=1000)
+        losses = train_logic(model.to(device), train_data, device, steps=2000, B=16)
         accuracies = evaluate_logic(model, test_data, device)
         results[name] = {'losses': losses, 'accuracies': accuracies}
         model.to('cpu')
