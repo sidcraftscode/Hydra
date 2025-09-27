@@ -16,14 +16,14 @@ class BenchConfig:
     d: int = 224
     n_blocks: int = 8
     vocab_size: int = 2000
-    train_steps: int = 1200
+    train_steps: int = 2200
     batch_size: int = 64
-    lr: float = 3e-4
-    warmup: int = 80
+    lr: float = 2e-4
+    warmup: int = 200
     max_hops_train: Tuple[int, int] = (2, 6)  # inclusive
     eval_hops: List[int] = (2, 3, 4, 5, 6)
     n_eval: int = 400
-    n_distractors: int = 6
+    n_distractors: int = 12
     seed: int = 1337
 
 
@@ -62,17 +62,28 @@ def make_chain(k: int, n_entities: int = 200) -> Tuple[List[Tuple[int, int]], in
     return edges, start, answer
 
 
-def add_distractors(edges: List[Tuple[int, int]], n_ents: int, n_distractors: int, avoid: set):
+def add_distractors(edges: List[Tuple[int, int]], n_ents: int, n_distractors: int, avoid: set, chain_nodes: set = None):
+    """Add random distractors; half branch out from chain nodes to increase ambiguity."""
     ds = 0
+    half = n_distractors // 2
+    chain_nodes = chain_nodes or set()
+    # Branching distractors from chain nodes
+    while ds < half:
+        if not chain_nodes:
+            break
+        u = random.choice(list(chain_nodes))
+        v = random.randint(1, n_ents)
+        if u == v: continue
+        if (u, v) in edges: continue
+        edges.append((u, v)); ds += 1
+    # Pure random distractors
     while ds < n_distractors:
         u = random.randint(1, n_ents)
         v = random.randint(1, n_ents)
-        if u == v:
-            continue
-        if (u, v) in edges or u in avoid or v in avoid:
-            continue
-        edges.append((u, v))
-        ds += 1
+        if u == v: continue
+        if (u, v) in edges: continue
+        if u in avoid and v in avoid: continue
+        edges.append((u, v)); ds += 1
 
 
 def format_example(vocab: Vocab, edges: List[Tuple[int, int]], start_ent: int, answer_ent: int, include_scratch: bool = True) -> Tuple[List[int], int, int]:
@@ -123,7 +134,8 @@ def evaluate(model, device, vocab: Vocab, hops: int, n_samples: int, n_distracto
     total = 0
     for _ in range(n_samples):
         edges, start, answer = make_chain(hops, n_entities=200)
-        add_distractors(edges, n_ents=200, n_distractors=n_distractors, avoid=set([start, answer]))
+        chain_nodes = {u for (u, _v) in edges} | {answer}
+        add_distractors(edges, n_ents=200, n_distractors=n_distractors, avoid=set(), chain_nodes=chain_nodes)
         x_ids, ans_pos, target_id = format_example(vocab, edges, start, answer)
         x = torch.tensor(x_ids, device=device).unsqueeze(0)
         logits = model(x)
@@ -143,7 +155,8 @@ def train_mixture(model, device, vocab: Vocab, cfg: BenchConfig):
         for _ in range(cfg.batch_size):
             k = random.randint(cfg.max_hops_train[0], cfg.max_hops_train[1])
             edges, start, answer = make_chain(k, n_entities=200)
-            add_distractors(edges, n_ents=200, n_distractors=cfg.n_distractors, avoid=set([start, answer]))
+            chain_nodes = {u for (u, _v) in edges} | {answer}
+            add_distractors(edges, n_ents=200, n_distractors=cfg.n_distractors, avoid=set(), chain_nodes=chain_nodes)
             x_ids, ap, tgt = format_example(vocab, edges, start, answer)
             seqs.append(x_ids)
             ans_pos.append(ap)
@@ -163,7 +176,9 @@ def train_mixture(model, device, vocab: Vocab, cfg: BenchConfig):
                     lb_terms.append(lb)
             if lb_terms:
                 loss = loss + base_cfg.aux_load_balance_weight * torch.stack(lb_terms).mean()
-        opt.zero_grad(); loss.backward(); opt.step()
+        opt.zero_grad(); loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        opt.step()
         # Simple LR warmup + cosine
         if step < cfg.warmup:
             lr_now = cfg.lr * (step + 1) / cfg.warmup
