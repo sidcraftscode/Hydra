@@ -223,6 +223,10 @@ class HydraConfig:
     pkm_gate_bias: Optional[float] = None
     pkm_dropout: float = 0.05
     pkm_window: Optional[int] = None  # if set, apply PKM only to last W tokens
+    # PKM table sizes (affect parameter count)
+    pkm_n1: int = 64
+    pkm_n2: int = 64
+    pkm_value_dim: int = 128
     gate_temp: float = 1.0  # new: temperature for MoE gate logits
     aux_load_balance_weight: float = 0.01  # coefficient for load balance loss
     ssm_kernel: int = 12  # kernel size for FastSSM depthwise conv
@@ -257,7 +261,7 @@ class ToyHydra(nn.Module):
             )
         self.blocks = nn.ModuleList(blocks)
         self.workspace = WorkspaceMemory(cfg.d) if cfg.use_workspace else None
-        self.pkm = PKMMemory(cfg.d, topk=cfg.pkm_topk) if cfg.use_pkm else None
+        self.pkm = PKMMemory(cfg.d, n1=cfg.pkm_n1, n2=cfg.pkm_n2, value_dim=cfg.pkm_value_dim, topk=cfg.pkm_topk) if cfg.use_pkm else None
         if self.pkm is not None:
             # Optional override of gate bias/dropout
             if cfg.pkm_gate_bias is not None and getattr(self.pkm.gate, 'bias', None) is not None:
