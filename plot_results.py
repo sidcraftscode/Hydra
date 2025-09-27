@@ -119,4 +119,86 @@ try:
 except FileNotFoundError:
     pass
 
+# Distant premise benchmark results
+try:
+    distant_results = []
+    with open(RES_DIR / 'distant_premise_benchmark_results.csv') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            row['accuracy'] = float(row['accuracy'])
+            row['latency_ms'] = float(row['latency_ms'])
+            row['peak_mem_MB'] = float(row['peak_mem_MB'])
+            distant_results.append(row)
+
+    if distant_results:
+        models = [r['model'] for r in distant_results]
+        accuracy = [r['accuracy'] for r in distant_results]
+        latency = [r['latency_ms'] for r in distant_results]
+        memory = [r['peak_mem_MB'] for r in distant_results]
+
+        # Bar chart for accuracy
+        plt.figure()
+        plt.bar(models, accuracy)
+        plt.ylabel('Accuracy (Exact Match)')
+        plt.title('Distant Premise Reasoning Accuracy')
+        plt.tight_layout()
+        plt.savefig(RES_DIR / 'fig_distant_accuracy.png', dpi=150)
+
+        # Bar chart for latency
+        plt.figure()
+        plt.bar(models, latency)
+        plt.ylabel('Latency (ms/token)')
+        plt.title('Distant Premise Reasoning Latency')
+        plt.tight_layout()
+        plt.savefig(RES_DIR / 'fig_distant_latency.png', dpi=150)
+        
+        # Bar chart for memory
+        plt.figure()
+        plt.bar(models, memory)
+        plt.ylabel('Peak Memory (MB)')
+        plt.title('Distant Premise Reasoning Memory')
+        plt.tight_layout()
+        plt.savefig(RES_DIR / 'fig_distant_memory.png', dpi=150)
+
+except FileNotFoundError:
+    pass
+
+# Conditional compute benchmark results
+try:
+    conditional_results = []
+    with open(RES_DIR / 'conditional_compute_benchmark.csv') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            row['accuracy'] = float(row['accuracy'])
+            row['latency_ms_per_query'] = float(row['latency_ms_per_query'])
+            row['tokens_per_sec'] = float(row['tokens_per_sec'])
+            conditional_results.append(row)
+
+    if conditional_results:
+        # Scatter plot: accuracy vs latency
+        plt.figure()
+        for res in conditional_results:
+            plt.scatter(res['latency_ms_per_query'], res['accuracy'], label=res['model'])
+        
+        plt.xlabel('Latency (ms/query)')
+        plt.ylabel('Accuracy (Exact Match)')
+        plt.title('Conditional Compute: Accuracy vs. Latency')
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(RES_DIR / 'fig_conditional_compute_scatter.png', dpi=150)
+
+        # Bar chart: tokens/sec throughput
+        plt.figure()
+        models = [r['model'] for r in conditional_results]
+        throughput = [r['tokens_per_sec'] for r in conditional_results]
+        plt.bar(models, throughput)
+        plt.ylabel('Tokens/sec Throughput')
+        plt.title('Conditional Compute: Throughput')
+        plt.tight_layout()
+        plt.savefig(RES_DIR / 'fig_conditional_compute_throughput.png', dpi=150)
+
+except FileNotFoundError:
+    pass
+
 print('Saved figures to results/*.png')

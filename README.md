@@ -6,6 +6,8 @@ Hydra: A 1.6B-Parameter State-Space Language Model with Sparse Attention, Mixtur
 
 Paper: https://arxiv.org/abs/2508.15099
 
+**One-line claim:** Hydra’s MoE layers deliver conditional efficiency — activating only the needed experts yields better accuracy per unit compute.
+
 Important: These scripts are illustrative and operate at small scale on synthetic data to validate integration and scaling trends. They are not a full 1.6B model training pipeline.
 
 ## Contents
@@ -15,6 +17,8 @@ Important: These scripts are illustrative and operate at small scale on syntheti
 - `pkm_memory.py` — Product-Key Memory (PKM) toy layer and helpers.
 - `logic_benchmark.py` — Logic composition benchmark (implication chains).
 - `pkm_benchmark.py` — PKM selective activation benchmark (open-book vs. closed-book).
+- `distant_premise_benchmark.py` — Distant premise reasoning benchmark (sparse attention vs. dense).
+- `conditional_compute_benchmark.py` — Conditional compute efficiency benchmark (MoE vs. dense).
 - `fairness_benchmark.py` — Training loop and short-context throughput benchmark on synthetic tasks.
 - `run_long_context.py` — Long-context throughput/memory runs (1k–16k tokens).
 - `speedup_summary.py` — Aggregates benchmark outputs and renders speedup tables.
@@ -51,6 +55,18 @@ Examples:
   
   ```bash
   python pkm_benchmark.py
+  ```
+
+- Run distant premise benchmark
+    
+  ```bash
+  python distant_premise_benchmark.py
+  ```
+
+- Run conditional compute benchmark
+    
+  ```bash
+  python conditional_compute_benchmark.py
   ```
 
 - Long-context benchmark (1k–16k)

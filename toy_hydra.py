@@ -242,7 +242,8 @@ class ToyHydra(nn.Module):
         self.pkm = PKM(cfg.d) if cfg.use_pkm else None
         self.ln_f = nn.LayerNorm(cfg.d)
         self.head = nn.Linear(cfg.d, cfg.vocab_size, bias=False)
-        self.head.weight = self.embed.weight
+        if not hasattr(self, 'head_override'):
+            self.head.weight = self.embed.weight
     def forward(self, idx):
         x = self.embed(idx)
         self.moe_stats = []
@@ -260,6 +261,8 @@ class ToyHydra(nn.Module):
             if self.pkm is not None:
                 x = self.pkm(x)
         x = self.ln_f(x)
+        if getattr(self, 'predict_last_only', False):
+            x = x[:, -1, :]
         return self.head(x)
 
 # ------------------ Baseline Transformer ------------------
