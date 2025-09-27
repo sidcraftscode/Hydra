@@ -13,7 +13,7 @@ Important: These scripts are illustrative and operate at small scale on syntheti
 - `ssm_kernels.py` — Placeholder selective-scan SSM; the fast surrogate lives in `toy_hydra.py`.
 - `workspace_memory.py` — Latent workspace memory (read/write) toy implementation.
 - `pkm_memory.py` — Product-Key Memory (PKM) toy layer and helpers.
-- `fairness_benchmark.py` — Training loop and short-context throughput benchmark on synthetic tasks.
+- `logic_benchmark.py` — Logic composition benchmark (implication chains / simple propositional logic).
 - `run_long_context.py` — Long-context throughput/memory runs (1k–16k tokens).
 - `speedup_summary.py` — Aggregates benchmark outputs and renders speedup tables.
 - `plot_results.py` — Plots figures from consolidated results.
@@ -33,10 +33,10 @@ Create an environment and install dependencies, then run any of the scripts belo
 
 Examples:
 
-- Run benchmark + training (default)
+- Logic composition benchmark
   
   ```bash
-  python fairness_benchmark.py
+  python logic_benchmark.py
   ```
 
 - Long-context benchmark (1k–16k)
