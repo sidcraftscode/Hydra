@@ -5,6 +5,7 @@ import torch
 import torch.nn.functional as F
 from toy_hydra import HydraConfig, ToyHydra, BaselineTransformer, count_parameters
 import random
+import copy
 
 # Logic benchmark vocab
 vocab = ['<pad>', '<eos>'] + list('ABCDEFGHIJKLMNOPQRSTUVWXYZ') + ['->', '.', '?']
@@ -12,7 +13,7 @@ vocab_size = len(vocab)
 token_to_id = {t: i for i, t in enumerate(vocab)}
 id_to_token = {i: t for t, i in token_to_id.items()}
 
-def generate_example(k, num_distractors=10):
+def generate_example(k, num_distractors=20):
     vars_list = list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
     chain_vars = vars_list[:k+1]
     distractor_vars = vars_list[k+1:]
@@ -92,10 +93,12 @@ if __name__ == '__main__':
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     base_cfg = HydraConfig(d=256, n_blocks=8, attn_every=4, moe_experts=4, moe_hidden=256, vocab_size=vocab_size, use_workspace=False, use_pkm=False)
     
+    cfg_on = copy.deepcopy(base_cfg)
+    cfg_on.use_workspace = True
     variants = {
         'transformer': BaselineTransformer(d=256, vocab_size=vocab_size, n_layers=8),
         'hydra_workspace_off': ToyHydra(base_cfg),
-        'hydra_workspace_on': ToyHydra(HydraConfig(**base_cfg.__dict__, use_workspace=True))
+        'hydra_workspace_on': ToyHydra(cfg_on)
     }
     
     # Generate train data
@@ -117,7 +120,7 @@ if __name__ == '__main__':
     results = {}
     for name, model in variants.items():
         print(f'Training {name}...')
-        losses = train_logic(model.to(device), train_data, device)
+        losses = train_logic(model.to(device), train_data, device, steps=1000)
         accuracies = evaluate_logic(model, test_data, device)
         results[name] = {'losses': losses, 'accuracies': accuracies}
         model.to('cpu')
