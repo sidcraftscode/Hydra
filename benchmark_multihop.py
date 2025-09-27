@@ -97,13 +97,13 @@ def format_example(vocab: Vocab, edges: List[Tuple[int, int]], start_ent: int, a
     for (u, v) in facts:
         toks += [f'E{u}', '->', f'E{v}', ';']
     toks += ['</facts>']
+    # Move question earlier so we can place scratch right before answer
+    toks += ['<q>', f'E{start_ent}', '->', '?', '</q>']
     if include_scratch:
         toks += ['<scratch>']
-        # Provide step scaffolding (not used for supervision, but helps learn)
         for (u, v) in edges:  # in original chain order
             toks += [f'E{u}', '->', f'E{v}', ';']
         toks += ['</scratch>']
-    toks += ['<q>', f'E{start_ent}', '->', '?', '</q>']
     toks += ['<ans>']
     x = vocab.encode(toks)
     ans_pos = len(x) - 1  # index of <ans>
@@ -140,7 +140,7 @@ def evaluate(model, device, vocab: Vocab, hops: int, n_samples: int, n_distracto
             chain_nodes = {n for n in chain_nodes if n not in {start, answer}}
             local_n = max(2, n_distractors // 2)
         else:
-            local_n = n_distractors + hops // 2
+            local_n = n_distractors
         add_distractors(edges, n_ents=200, n_distractors=local_n, avoid=set(), chain_nodes=chain_nodes)
         x_ids, ans_pos, target_id = format_example(vocab, edges, start, answer)
         x = torch.tensor(x_ids, device=device).unsqueeze(0)
@@ -159,25 +159,26 @@ def train_mixture(model, device, vocab: Vocab, cfg: BenchConfig):
         # Sample mixed hops in batch
         seqs, ans_pos, targets = [], [], []
         for _ in range(cfg.batch_size):
-            # Curriculum: during warmup, mostly k=2; later, bimodal on k=2 and high hops
+            # Curriculum: warmup mostly k=2; afterwards tri-modal with mid-range emphasis
             if step < cfg.warmup:
                 k = 2 if random.random() < 0.85 else random.randint(cfg.max_hops_train[0], cfg.max_hops_train[1])
             else:
                 r = random.random()
-                if r < 0.35:
+                mid_hi = min(8, cfg.max_hops_train[1])
+                hi_lo = max(9, cfg.max_hops_train[1] - 3)
+                if r < 0.30:
                     k = 2
-                elif r < 0.65:
-                    k = random.randint(3, min(6, cfg.max_hops_train[1]))
+                elif r < 0.70:
+                    k = random.randint(3, mid_hi)
                 else:
-                    high_lo = max(6, cfg.max_hops_train[1] - 4)
-                    k = random.randint(high_lo, cfg.max_hops_train[1])
+                    k = random.randint(hi_lo, cfg.max_hops_train[1])
             edges, start, answer = make_chain(k, n_entities=200)
             chain_nodes = {u for (u, _v) in edges} | {answer}
             if k <= 2:
                 chain_nodes = {n for n in chain_nodes if n not in {start, answer}}
                 local_n = max(2, cfg.n_distractors // 2)
             else:
-                local_n = cfg.n_distractors + k // 2
+                local_n = cfg.n_distractors
             add_distractors(edges, n_ents=200, n_distractors=local_n, avoid=set(), chain_nodes=chain_nodes)
             x_ids, ap, tgt = format_example(vocab, edges, start, answer)
             seqs.append(x_ids)
