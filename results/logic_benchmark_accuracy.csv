@@ -1,0 +1,13 @@
+model,proof_length,accuracy
+Hydra (Workspace ON),2,0.76
+Hydra (Workspace ON),3,0.47
+Hydra (Workspace ON),4,0.30
+Hydra (Workspace ON),5,0.19
+Hydra (Workspace OFF),2,0.03
+Hydra (Workspace OFF),3,0.05
+Hydra (Workspace OFF),4,0.04
+Hydra (Workspace OFF),5,0.02
+Transformer,2,0.07        
+Transformer,3,0.05
+Transformer,4,0.02
+Transformer,5,0.02

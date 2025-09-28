@@ -1,0 +1,4 @@
+model,accuracy,latency_ms_per_token,peak_mem_MB,seq_len,premise_pos
+transformer,0.4,0.00344736035913229,861.8065920000001,4096,2000
+hydra_sparse_attn_on,0.4,0.0026788213290274143,866.420736,4096,2000
+hydra_sparse_attn_off,0.2,0.0014100223779678345,323.340288,4096,2000

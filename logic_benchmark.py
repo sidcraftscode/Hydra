@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
-import matplotlib.pyplot as plt
 import random
 import csv
 import os
@@ -213,21 +212,6 @@ def run_benchmark():
             accuracy = correct / num_eval
             results[name].append(accuracy)
             print(f"  {name} - Accuracy: {accuracy:.2f}\n")
-
-    # Plotting
-    plt.figure(figsize=(10, 6))
-    for name, accuracies in results.items():
-        plt.plot(chain_lengths, accuracies, marker='o', linestyle='-', label=name)
-    
-    plt.title('Logic Composition Benchmark: Accuracy vs. Proof Length')
-    plt.xlabel('Proof Length (Number of Implications)')
-    plt.ylabel('Accuracy')
-    plt.xticks(chain_lengths)
-    plt.ylim(0, 1.1)
-    plt.grid(True, which='both', linestyle='--', linewidth=0.5)
-    plt.legend()
-    plt.savefig('logic_benchmark_results.png')
-    print("Benchmark finished. Plot saved to logic_benchmark_results.png")
 
     # Save results to CSV
     results_dir = 'results'

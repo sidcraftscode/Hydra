@@ -122,18 +122,18 @@ except FileNotFoundError:
 # Distant premise benchmark results
 try:
     distant_results = []
-    with open(RES_DIR / 'distant_premise_benchmark_results.csv') as f:
+    with open(RES_DIR / 'distant_premise_benchmark.csv') as f:
         reader = csv.DictReader(f)
         for row in reader:
             row['accuracy'] = float(row['accuracy'])
-            row['latency_ms'] = float(row['latency_ms'])
+            row['latency_ms_per_token'] = float(row['latency_ms_per_token'])
             row['peak_mem_MB'] = float(row['peak_mem_MB'])
             distant_results.append(row)
 
     if distant_results:
         models = [r['model'] for r in distant_results]
         accuracy = [r['accuracy'] for r in distant_results]
-        latency = [r['latency_ms'] for r in distant_results]
+        latency = [r['latency_ms_per_token'] for r in distant_results]
         memory = [r['peak_mem_MB'] for r in distant_results]
 
         # Bar chart for accuracy
@@ -175,28 +175,47 @@ try:
             conditional_results.append(row)
 
     if conditional_results:
-        # Scatter plot: accuracy vs latency
-        plt.figure()
-        for res in conditional_results:
-            plt.scatter(res['latency_ms_per_query'], res['accuracy'], label=res['model'])
-        
-        plt.xlabel('Latency (ms/query)')
-        plt.ylabel('Accuracy (Exact Match)')
-        plt.title('Conditional Compute: Accuracy vs. Latency')
-        plt.legend()
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig(RES_DIR / 'fig_conditional_compute_scatter.png', dpi=150)
-
-        # Bar chart: tokens/sec throughput
+        # Bar chart for accuracy
         plt.figure()
         models = [r['model'] for r in conditional_results]
-        throughput = [r['tokens_per_sec'] for r in conditional_results]
-        plt.bar(models, throughput)
-        plt.ylabel('Tokens/sec Throughput')
-        plt.title('Conditional Compute: Throughput')
+        accuracy = [r['accuracy'] for r in conditional_results]
+        plt.bar(models, accuracy)
+        plt.ylabel('Accuracy (Exact Match)')
+        plt.title('Conditional Compute: Accuracy')
         plt.tight_layout()
-        plt.savefig(RES_DIR / 'fig_conditional_compute_throughput.png', dpi=150)
+        plt.savefig(RES_DIR / 'fig_conditional_compute_accuracy.png', dpi=150)
+
+except FileNotFoundError:
+    pass
+
+# Logic benchmark results
+try:
+    logic_results = defaultdict(list)
+    with open(RES_DIR / 'logic_benchmark_accuracy.csv') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            logic_results[row['model']].append((int(row['proof_length']), float(row['accuracy'])))
+
+    if logic_results:
+        plt.figure(figsize=(10, 6))
+        for model, values in logic_results.items():
+            values.sort()
+            proof_lengths = [v[0] for v in values]
+            accuracies = [v[1] for v in values]
+            plt.plot(proof_lengths, accuracies, marker='o', linestyle='-', label=model)
+        
+        plt.title('Logic Composition Benchmark: Accuracy vs. Proof Length')
+        plt.xlabel('Proof Length (Number of Implications)')
+        plt.ylabel('Accuracy')
+        # Use a sorted list of unique proof lengths for xticks
+        all_proof_lengths = sorted(list(set(pl for values in logic_results.values() for pl, acc in values)))
+        if all_proof_lengths:
+            plt.xticks(all_proof_lengths)
+        plt.ylim(0, 1.1)
+        plt.grid(True, which='both', linestyle='--', linewidth=0.5)
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(RES_DIR / 'fig_logic_benchmark.png', dpi=150)
 
 except FileNotFoundError:
     pass
