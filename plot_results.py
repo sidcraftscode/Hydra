@@ -220,4 +220,52 @@ try:
 except FileNotFoundError:
     pass
 
+# FLOPS summary
+try:
+    flops_rows = []
+    with open(RES_DIR / 'flops_summary.csv') as f:
+        reader = csv.DictReader(f)
+        for r in reader:
+            r['seq_len'] = int(r['seq_len'])
+            r['achieved_tflops'] = float(r['achieved_tflops'])
+            r['flops_per_token'] = float(r['flops_per_token'])
+            flops_rows.append(r)
+
+    # Group
+    group = defaultdict(list)
+    for r in flops_rows:
+        group[r['model']].append(r)
+    for k in group:
+        group[k] = sorted(group[k], key=lambda x: x['seq_len'])
+
+    # Plot achieved TFLOPS vs length
+    plt.figure()
+    for model, rows in group.items():
+        if model not in ['hydra', 'transformer']:
+            continue
+        plt.plot([r['seq_len'] for r in rows], [r['achieved_tflops'] for r in rows], marker='o', label=model)
+    plt.xscale('log', base=2)
+    plt.xlabel('Sequence length')
+    plt.ylabel('Achieved TFLOPs/sec')
+    plt.title('2. Achieved TFLOPs/sec vs. Seq Length')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(RES_DIR / 'fig_achieved_tflops.png', dpi=150)
+
+    # Plot TFLOPs per token vs length
+    plt.figure()
+    for model, rows in group.items():
+        if model not in ['hydra', 'transformer']:
+            continue
+        plt.plot([r['seq_len'] for r in rows], [r['flops_per_token'] / 1e12 for r in rows], marker='o', label=model)
+    plt.xscale('log', base=2)
+    plt.xlabel('Sequence length')
+    plt.ylabel('TeraFLOPs per Token')
+    plt.title('TeraFLOPs per Token vs. Sequence Length')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(RES_DIR / 'fig_tflops_per_token.png', dpi=150)
+except FileNotFoundError:
+    pass
+
 print('Saved figures to results/*.png')
