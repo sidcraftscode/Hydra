@@ -86,10 +86,3 @@ Examples:
 Notes:
 - Default toy config uses d=256, 8 blocks, attention every 4th block, MoE on even blocks, Top-2 routing.
 - Scripts generate CSV/JSON artifacts such as `throughput_summary.csv`, `speedup_summary.json`, `train_losses.csv` in `results/`.
-
-## Citation
-If you use this code, please cite the paper:
-
-Hydra: A 1.6B-Parameter State-Space Language Model with Sparse Attention, Mixture-of-Experts, and Memory
-
-https://arxiv.org/abs/2508.15099
