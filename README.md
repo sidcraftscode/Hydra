@@ -4,9 +4,6 @@ This folder contains the toy-scale prototype code accompanying the Hydra paper:
 
 Hydra: A 1.6B-Parameter State-Space Language Model with Sparse Attention, Mixture-of-Experts, and Memory
 
-
-**One-line claim:** Hydra’s MoE layers deliver conditional efficiency — activating only the needed experts yields better accuracy per unit compute.
-
 Important: These scripts are illustrative and operate at small scale on synthetic data to validate integration and scaling trends. They are not a full 1.6B model training pipeline.
 
 ## Contents
