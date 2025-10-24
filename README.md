@@ -1,10 +1,8 @@
 # Hydra
 
-This folder contains the toy-scale prototype code accompanying the Hydra paper:
+This folder contains the code accompanying the Hydra paper:
 
-Hydra: A 1.6B-Parameter State-Space Language Model with Sparse Attention, Mixture-of-Experts, and Memory
-
-Important: These scripts are illustrative and operate at small scale on synthetic data to validate integration and scaling trends. They are not a full 1.6B model training pipeline.
+Hydra: A Modular Architecture for Efficient Long-Context Reasoning
 
 ## Contents
 - `toy_hydra.py` — Minimal Hydra model (SSM + sparse attention + MoE) used in benchmarks.
